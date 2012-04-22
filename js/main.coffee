@@ -16,22 +16,20 @@ class Color
         return as_string
 
 # Takes a list of Color objects and
-# returns a new Color with is the average.
+# returns a new average Color.
 # nulls are ignored.
 mix_colors = (colors) ->
     present_colors = []
     for color in colors
         if color isnt null
             present_colors.push(color)
-    if present_colors.length is 0
-        return new Color(1, 0, 0, 0)
     colors = present_colors
 
     total_a = 0
     for color in colors
         total_a += color.a
     if total_a == 0
-        return new Color(0, 0, 0, 0)
+        return new Color(1, 0, 0, 0)
 
     out_channels = {}
     for channel in ['r', 'g', 'b']
@@ -47,34 +45,39 @@ mix_colors = (colors) ->
 
 # Implements Conway's Game of Life, 
 # displaying on_color if the cell is alive.
-# Only is effect by other ConwayEffects of the same color.
+# Only is effected by other ConwayEffects of the same color.
 class ConwayEffect
     constructor: (@on_color) ->
         @is_alive = Math.random() > 0.5
 
     step: (ms, area) ->
-        next_conway = new ConwayEffect(@on_color)
-        next_conway.is_alive = @is_alive
         num_live_neighbors = 0
         for neighbor_cell in area.get_neighbors()
             neighbor_conway = neighbor_cell.effects[@get_key()]
             if neighbor_conway.is_alive
                 num_live_neighbors += 1
 
-        if @is_alive
-            if num_live_neighbors < 2
-                # die from underpopulation
-                next_conway.is_alive = no
-            else if num_live_neighbors > 3
-                # die from overpopulation
-                next_conway.is_alive = no
-            # (otherwise it survives, life is good)
-        else if num_live_neighbors is 3
-            # come alive from reproduction
-            next_conway.is_alive = yes
-        if Math.random() > 0.999
-            next_conway.is_alive = yes
+        next_conway = new ConwayEffect(@on_color)
+        next_conway.is_alive = @will_be_alive(num_live_neighbors, @is_alive)
         return next_conway
+    
+    # returns whether a cell will be alive using Conway's rules
+    will_be_alive: (num_live_neighbors, was_alive) ->
+        if Math.random() > 0.9999
+            # come alive randomly just because
+            return yes
+            
+        if num_live_neighbors < 2
+            # die from underpopulation
+            return no
+        else if num_live_neighbors > 3
+            # die from overpopulation
+            return no
+        else if num_live_neighbors is 3
+            return yes
+        else
+            return was_alive
+
 
     get_key: ->
         return @on_color.to_string()
