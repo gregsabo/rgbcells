@@ -247,24 +247,6 @@ class Field
         @rows[row_num][column_num].on_click()
 
 
-    # Given the current time (ms), tell
-    # every cell to increment its state
-    # zero to many times
-    step: (ms) ->
-        for each_ms in [@last_time..ms]
-            #only notify every X ms
-            if each_ms % 500 isnt 0
-                continue
-            # measure potential effects
-            for row in @rows
-                for cell in row
-                    cell.step(each_ms)
-            # implement effects
-            for row in @rows
-                for cell in row
-                    cell.flip()
-        @last_time = ms
-
 class Billboard
     constructor: (@x, @y, @width, @height) ->
 
