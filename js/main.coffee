@@ -120,18 +120,12 @@ class CellArea
 
 
 # A cell is a single square on the Field.
-# It know about:
+# It knows about:
+#   - A billboard used to display itself
 #   - its own unique set of Effects objects
 #   - its own CellArea object
-# Currently this class mixes in view logic.
-# Therefore, the Cell must also know its
-# coordinates and size on the canvas.
 class Cell
-    constructor: (@x, @y, @width, @height) ->
-        @x = Math.round(@x)
-        @y = Math.round(@y)
-        @width = Math.round(@width)
-        @height = Math.round(@height)
+    constructor: (@billboard) ->
         effects_list = [
             new ConwayEffect(new Color(1, 1, 0, 0)),
             new ConwayEffect(new Color(1, 0, 1, 0)),
@@ -149,7 +143,6 @@ class Cell
         # We don't know this at construction time because 
         # not all of the other cells have been created yet.
         @area = null
-        @last_color = null
         
 
     # examine the Area and calculate what the next
@@ -172,15 +165,8 @@ class Cell
         for name, effect of @effects
             colors.push(effect.get_color())
         mixed = mix_colors(colors)
-        mixed_string = mixed.to_string()
-        if mixed_string == @last_color
-            # cell looks the same, so carry it over
-            # from the last frame.
-            return
-
-        ctx.fillStyle = mixed.to_string()
-        ctx.fillRect(@x, @y, @width, @height)
-        @last_color = mixed_string
+        @billboard.set_color(mixed)
+        @billboard.draw(ctx)
 
     # Notify all of the effects that this cell has been
     # clicked, if they care.
@@ -209,7 +195,8 @@ class Field
             for col_num in [0...num_columns]
                 this_x = @x + (col_num * column_width)
                 this_y = @y + (row_num * row_height)
-                this_row.push(new Cell(this_x, this_y, column_width, row_height))
+                cell_billboard = new Billboard(this_x, this_y, column_width, row_height)
+                this_row.push(new Cell(cell_billboard))
             @rows.push this_row
 
         # Now that all cells exist, introduce them to each other
@@ -247,11 +234,33 @@ class Field
         @rows[row_num][column_num].on_click()
 
 
+# An immovable colored square which can change color
+# and be drawn repeatedly to a canvas.
 class Billboard
     constructor: (@x, @y, @width, @height) ->
+        # canvas performs better with integer coordinates
+        @x = Math.round(@x)
+        @y = Math.round(@y)
+        @width = Math.round(@width)
+        @height = Math.round(@height)
+
+        @color_string = null
+        @is_dirty = yes
+
+    set_color: (new_color) ->
+        new_color_string = new_color.to_string()
+        if new_color_string != @color_string
+            @is_dirty = yes
+            @color_string = new_color_string
 
     draw: (ctx) ->
-        ctx.clearRect(@x, @y, @width, @height)
+        # only redraws if color changes
+        # this assumes the canvas is not being cleared each frame
+        # and that nothing ever obstructs the square
+        if @is_dirty
+            ctx.fillStyle = @color_string
+            ctx.fillRect(@x, @y, @width, @height)
+        @is_dirty = no
 
 
 # Use the reqestAnimationFrame function appropriate to the browser
