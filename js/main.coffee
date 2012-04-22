@@ -1,15 +1,32 @@
 # Set of color channels, I put alpha first
 # because it seems most important
+# the string cache assumes that this object
+# is treated as immutable.
 class Color
     constructor: (@a, @r, @g, @b) ->
+        @cached_string = null
 
     to_string: ->
-        out = "rgba(#{Math.floor(@r*256)},#{Math.floor(@g*256)},#{Math.floor(@b*256)},#{@a})"
-        return out
+        if @cached_string?
+            return @cached_string
+
+        as_list = ['rgba(', Math.floor(@r*256), ',', Math.floor(@g*256), ',', Math.floor(@b*256), ',', @a, ')']
+        as_string = as_list.join('')
+        @cached_string = as_string
+        return as_string
 
 # Takes a list of Color objects and
 # returns a new Color with is the average.
+# nulls are ignored.
 mix_colors = (colors) ->
+    present_colors = []
+    for color in colors
+        if color isnt null
+            present_colors.push(color)
+    if present_colors.length is 0
+        return new Color(1, 0, 0, 0)
+    colors = present_colors
+
     total_a = 0
     for color in colors
         total_a += color.a
@@ -27,109 +44,44 @@ mix_colors = (colors) ->
     average_a = total_a / colors.length
     return new Color(average_a, out_channels.r, out_channels.g, out_channels.b)
 
-class EvolveEffect
-    constructor: ->
-    get_color: ->
-    step: (ms, area) ->
 
-
-class DirectionalEffect
-    constructor: ->
-        @mode = "resting"
-        @amount = 0
-        @direction = 0.2
+# Implements Conway's Game of Life, 
+# displaying on_color if the cell is alive.
+# Only is effect by other ConwayEffects of the same color.
+class ConwayEffect
+    constructor: (@on_color) ->
+        @is_alive = Math.random() > 0.5
 
     step: (ms, area) ->
-        next_effect = @make_successor()
-        next_effect.mode = @mode
-        next_effect.amount = @amount
-        next_effect.direction = @direction
+        next_conway = new ConwayEffect(@on_color)
+        next_conway.is_alive = @is_alive
+        num_live_neighbors = 0
+        for neighbor_cell in area.get_neighbors()
+            neighbor_conway = neighbor_cell.effects[@get_key()]
+            if neighbor_conway.is_alive
+                num_live_neighbors += 1
 
-        if @mode is "resting"
-            next_effect.amount = @get_ancestor(area).amount
-            if @get_elder_sibling(area).mode is "planning"
-                next_effect.mode = "planning"
-        if @mode is "planning"
-            if (@get_elder_sibling(area).mode isnt "resting" and @get_younger_sibling(area).mode isnt "resting")
-                next_effect.mode = "broadcasting"
-        if @mode is "broadcasting"
-            next_effect.amount = @amount + @direction
-            #console.log "Example amount:", next_effect.amount, @direction
-            if next_effect.amount >= 1
-                next_effect.direction *= -1
-            if next_effect.amount <= 0
-                next_effect.amount = 0
-                next_effect.direction *= -1
-                next_effect.mode = "resting"
-        return next_effect
+        if @is_alive
+            if num_live_neighbors < 2
+                # die from underpopulation
+                next_conway.is_alive = no
+            else if num_live_neighbors > 3
+                # die from overpopulation
+                next_conway.is_alive = no
+            # (otherwise it survives, life is good)
+        else if num_live_neighbors is 3
+            # come alive from reproduction
+            next_conway.is_alive = yes
+        return next_conway
 
+    get_key: ->
+        return @on_color.to_string()
+    
     get_color: ->
-        if @is_on
-            return @get_active_color()
+        if @is_alive
+            return @on_color
         else
-            return new Color(0, 0, 0, 0)
-
-
-class FluEffect extends DirectionalEffect
-    constructor: ->
-        super()
-        @direction = 0.19
-
-    get_ancestor: (area) ->
-        area.w.effects.flu
-
-    get_elder_sibling: (area) ->
-        area.s.effects.flu
-
-    get_younger_sibling: (area) ->
-        area.n.effects.flu
-
-    make_successor: ->
-        return new FluEffect()
-
-    get_color: ->
-        if @mode is "planning"
-            return new Color(0.3, 0, 1, 0)
-        if @mode is "broadcasting"
-            return new Color(0.6, 0, 1, 0)
-        if @amount > 0
-            return new Color(@amount, 0, 1, 0)
-        else
-            return new Color(@amount, 1, 0, 0)
-
-
-class HopeEffect extends DirectionalEffect
-    constructor: ->
-        super()
-        @direction = 0.27
-
-    get_ancestor: (area) ->
-        area.n.effects.hope
-
-    get_elder_sibling: (area) ->
-        area.w.effects.hope
-
-    get_younger_sibling: (area) ->
-        area.e.effects.hope
-
-    make_successor: ->
-        return new HopeEffect()
-
-    get_color: ->
-        if @mode is "planning"
-            return new Color(0.3, 0, 0, 1)
-        if @mode is "broadcasting"
-            return new Color(0.6, 0, 0, 1)
-        if @amount > 0
-            return new Color(@amount, 0, 0, 1)
-        else
-            return new Color(@amount, 1, 1, 1)
-
-    on_click: ->
-        @amount = 0
-        @direction = 0.27
-        @mode = "resting"
-
+            return null
 
 
 # Given a pair of coordinates and a doubly-
@@ -163,6 +115,9 @@ class CellArea
         @w = rows[level][left]
         @nw = rows[up][left]
 
+    get_neighbors: ->
+        return [@n, @ne, @e, @se, @s, @sw, @w, @nw]
+
 
 # A cell is a single square on the Field.
 # It know about:
@@ -177,13 +132,24 @@ class Cell
         @y = Math.round(@y)
         @width = Math.round(@width)
         @height = Math.round(@height)
-        @effects = {
-            flu: new FluEffect()
-            hope: new HopeEffect()
-        }
-        #these must be set before step() and draw() are called
+        effects_list = [
+            new ConwayEffect(new Color(1, 1, 0, 0)),
+            new ConwayEffect(new Color(1, 0, 1, 0)),
+            new ConwayEffect(new Color(1, 0, 0, 1)),
+            new ConwayEffect(new Color(1, 0.5, 0.5, 0)),
+            new ConwayEffect(new Color(1, 0.5, 0, 0.5)),
+            new ConwayEffect(new Color(1, 0, 0.5, 0.5))
+        ]
+        @effects = {}
+        for effect in effects_list
+            @effects[effect.get_key()] = effect
+
         @next_effects = null
+        # this must be set before step() and draw() are called.
+        # We don't know this at construction time because 
+        # not all of the other cells have been created yet.
         @area = null
+        @last_color = null
         
 
     # examine the Area and calculate what the next
@@ -206,8 +172,15 @@ class Cell
         for name, effect of @effects
             colors.push(effect.get_color())
         mixed = mix_colors(colors)
+        mixed_string = mixed.to_string()
+        if mixed_string == @last_color
+            # cell looks the same, so carry it over
+            # from the last frame.
+            return
+
         ctx.fillStyle = mixed.to_string()
         ctx.fillRect(@x, @y, @width, @height)
+        @last_color = mixed_string
 
     # Notify all of the effects that this cell has been
     # clicked, if they care.
@@ -246,10 +219,15 @@ class Field
                 this_cell = @rows[row_num][col_num]
                 this_cell_area = new CellArea(row_num, col_num, @rows)
                 this_cell.area = this_cell_area
-        @rows[0][0].effects.flu.mode = "planning"
-        @rows[5][5].effects.hope.mode = "planning"
 
     draw: (ctx) ->
+        for row in @rows
+            for cell in row
+                cell.step(0)
+        # implement effects
+        for row in @rows
+            for cell in row
+                cell.flip()
         for row in @rows
             for cell in row
                 cell.draw(ctx)
@@ -268,13 +246,14 @@ class Field
         column_num = Math.floor(field_x / column_width)
         @rows[row_num][column_num].on_click()
 
+
     # Given the current time (ms), tell
     # every cell to increment its state
     # zero to many times
     step: (ms) ->
         for each_ms in [@last_time..ms]
             #only notify every X ms
-            if each_ms % 100 isnt 0
+            if each_ms % 500 isnt 0
                 continue
             # measure potential effects
             for row in @rows
@@ -302,9 +281,9 @@ requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimati
 # as close to 60Hz as possible.
 draw_loop = (ctx, drawable_world) ->
     this_time = Math.floor(new Date().getTime())
-    for drawable_item in drawable_world
-        if drawable_item.step?
-            drawable_item.step(this_time)
+    #for drawable_item in drawable_world
+        #if drawable_item.step?
+            #drawable_item.step(this_time)
 
     for drawable_item in drawable_world
         if drawable_item.draw?
@@ -349,7 +328,7 @@ $( ->
     ctx = canvas.getContext("2d")
 
     drawable_world = []
-    drawable_world.push(new Billboard(0, 0, canvas.width, canvas.height))
+    #drawable_world.push(new Billboard(0, 0, canvas.width, canvas.height))
     field = new Field(0, 0, canvas.width, canvas.height, 50, 50)
     drawable_world.push(field)
     register_click_events(canvas, field)
