@@ -1,0 +1,1 @@
+Coffescript for rendering cellular automata grids on a canvas with support for multiple "effects" and color mixing. Implements Conway's Game of Life but is easily extensible for other systems as well.
