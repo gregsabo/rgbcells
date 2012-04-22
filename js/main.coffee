@@ -1,12 +1,14 @@
+# Set of color channels, I put alpha first
+# because it seems most important
 class Color
     constructor: (@a, @r, @g, @b) ->
 
     to_string: ->
         out = "rgba(#{Math.floor(@r*256)},#{Math.floor(@g*256)},#{Math.floor(@b*256)},#{@a})"
-        #if Math.random() > 0.9999
-        #    console.log "COLOR IS", out
         return out
 
+# Takes a list of Color objects and
+# returns a new Color with is the average.
 mix_colors = (colors) ->
     total_a = 0
     for color in colors
@@ -162,6 +164,13 @@ class CellArea
         @nw = rows[up][left]
 
 
+# A cell is a single square on the Field.
+# It know about:
+#   - its own unique set of Effects objects
+#   - its own CellArea object
+# Currently this class mixes in view logic.
+# Therefore, the Cell must also know its
+# coordinates and size on the canvas.
 class Cell
     constructor: (@x, @y, @width, @height) ->
         @x = Math.round(@x)
@@ -172,19 +181,26 @@ class Cell
             flu: new FluEffect()
             hope: new HopeEffect()
         }
+        #these must be set before step() and draw() are called
         @next_effects = null
-        #this must be set before step() and draw()
+        @area = null
         
 
+    # examine the Area and calculate what the next
+    # set of effects will be (but don't switch to them yet)
     step: (ms) ->
         @next_effects = {}
         for name, effect of @effects
             @next_effects[name] = effect.step(ms, @area)
 
+    # Switch over to the next set of effects, which should
+    # have already been computed using step()
     flip: ->
         @effects = @next_effects
         @next_effects = null
 
+    # Draw a square to the 2d context (ctx).
+    # The color is averaged from the current set of Effects.
     draw: (ctx) ->
         colors = []
         for name, effect of @effects
@@ -193,12 +209,17 @@ class Cell
         ctx.fillStyle = mixed.to_string()
         ctx.fillRect(@x, @y, @width, @height)
 
+    # Notify all of the effects that this cell has been
+    # clicked, if they care.
     on_click: ->
         for name, effect of @effects
             if effect.on_click?
                 effect.on_click()
 
 
+# A 2d array of cells, as well as the coordinates and size
+# used to draw each of the cells and the timing state
+# used to increment the cell state logic
 class Field
     constructor: (@x, @y, @width, @height, num_rows, num_columns) ->
         @x = Math.round(@x)
@@ -219,6 +240,7 @@ class Field
             @rows.push this_row
 
         # Now that all cells exist, introduce them to each other
+        # with CellArea objects
         for row_num in [0...num_rows]
             for col_num in [0...num_rows]
                 this_cell = @rows[row_num][col_num]
@@ -233,24 +255,8 @@ class Field
                 cell.draw(ctx)
         return
 
-        old_style = ctx.strokeStyle
-        ctx.strokeStyle = "#fff"
-        row_height = @height / @rows.length
-        for row_num in [0..@rows.length+1]
-            y = Math.round(row_num*row_height)
-            ctx.moveTo(0, y)
-            ctx.lineTo(@x+@width, y)
-            ctx.stroke()
-
-        num_columns = @rows[0].length
-        column_width = @width / num_columns
-        for column_num in [0..@rows[0].length]
-            x = column_num*column_width
-            ctx.moveTo(x, 0)
-            ctx.lineTo(x, @y+@height)
-            ctx.stroke()
-        ctx.strokeStyle = old_style
-
+    # adjust the click coordinates for the Field's offset
+    # and notify the cell that was clicked.
     on_click: (x, y) ->
         field_x = x + @x
         field_y = y + @y
@@ -262,8 +268,12 @@ class Field
         column_num = Math.floor(field_x / column_width)
         @rows[row_num][column_num].on_click()
 
+    # Given the current time (ms), tell
+    # every cell to increment its state
+    # zero to many times
     step: (ms) ->
         for each_ms in [@last_time..ms]
+            #only notify every X ms
             if each_ms % 100 isnt 0
                 continue
             # measure potential effects
@@ -283,6 +293,13 @@ class Billboard
         ctx.clearRect(@x, @y, @width, @height)
 
 
+# Use the reqestAnimationFrame function appropriate to the browser
+requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
+                        window.webkitRequestAnimationFrame || window.msRequestAnimationFrame
+
+# call .draw() on every object in the drawable_world list,
+# passing in the context (ctx). Recursively repeat
+# as close to 60Hz as possible.
 draw_loop = (ctx, drawable_world) ->
     this_time = Math.floor(new Date().getTime())
     for drawable_item in drawable_world
@@ -297,10 +314,12 @@ draw_loop = (ctx, drawable_world) ->
         draw_loop(ctx, drawable_world)
     )
 
-requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
-                        window.webkitRequestAnimationFrame || window.msRequestAnimationFrame
 
 
+# Take an onclick event and a canvas,
+# and return an {x, y} object with the
+# mouse coordinates adjusted to place the 
+# origin on the canvas instead of in the window
 mouse_coordinates = (event, canvas) ->
     total_offset_x = 0
     total_offset_y = 0
@@ -316,7 +335,6 @@ mouse_coordinates = (event, canvas) ->
     ret = {}
     ret.x = event.pageX - total_offset_x
     ret.y = event.pageY - total_offset_y
-    console.log "coordinates were", ret
 
     return ret
 
