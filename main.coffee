@@ -29,8 +29,10 @@ window.onload = ->
 
 
 # Use the reqestAnimationFrame function appropriate to the browser
-requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
-                        window.webkitRequestAnimationFrame || window.msRequestAnimationFrame
+requestAnimationFrame = (window.requestAnimationFrame ||
+                        window.mozRequestAnimationFrame ||
+                        window.webkitRequestAnimationFrame ||
+                        window.msRequestAnimationFrame)
 
 
 # call .draw() on every object in the drawable_world list,
@@ -62,7 +64,8 @@ class Field
             for col_num in [0...num_columns]
                 this_x = @x + (col_num * column_width)
                 this_y = @y + (row_num * row_height)
-                cell_billboard = new Billboard(this_x, this_y, column_width, row_height)
+                cell_billboard = new Billboard(this_x, this_y,
+                    column_width, row_height)
                 this_row.push(new Cell(cell_billboard))
             @rows.push this_row
 
