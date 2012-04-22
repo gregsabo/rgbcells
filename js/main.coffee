@@ -72,6 +72,8 @@ class ConwayEffect
         else if num_live_neighbors is 3
             # come alive from reproduction
             next_conway.is_alive = yes
+        if Math.random() > 0.999
+            next_conway.is_alive = yes
         return next_conway
 
     get_key: ->
@@ -319,7 +321,6 @@ $( ->
     ctx = canvas.getContext("2d")
 
     drawable_world = []
-    #drawable_world.push(new Billboard(0, 0, canvas.width, canvas.height))
     field = new Field(0, 0, canvas.width, canvas.height, 50, 50)
     drawable_world.push(field)
     register_click_events(canvas, field)
