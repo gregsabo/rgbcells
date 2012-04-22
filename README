@@ -1,1 +1,10 @@
-Coffescript for rendering cellular automata grids on a canvas with support for multiple "effects" and color mixing. Implements Conway's Game of Life but is easily extensible for other systems as well.
+This project is simply an implementation of Conway's Game of Life in coffeescript for the HTML canvas element. My goal was to make the code as easy-to-understand as possible. I tried to do this with semantically organized classes, as follows:
+
+A Field is a 2d-array of Cells.
+A Cell is a CellArea, some Effects, and a Billboard.
+A CellArea is a set of references to 8 nearby Cells.
+An Effect is protected state which generates a Color for each frame depending on the state of the other Effects in the surrounding CellArea.
+A Billboard is a rectangle that is repeatedly drawn on an HTML canvas in a certain Color.
+A Color is some amount of alpha, red, green, and blue.
+
+The program intiailizes a Field of Cells then repeatedly calculates the changes in Effects to each of those Cells, displaying the resulting Colors on Billboards using an HTML canvas.
