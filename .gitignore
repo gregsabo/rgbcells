@@ -3,4 +3,4 @@
 *.swp
 *.pyc
 known_hosts
-js/main.js
+main.js
