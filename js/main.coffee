@@ -50,7 +50,7 @@ class ConwayEffect
     constructor: (@on_color) ->
         @is_alive = Math.random() > 0.5
 
-    step: (ms, area) ->
+    make_next: (ms, area) ->
         num_live_neighbors = 0
         for neighbor_cell in area.get_neighbors()
             neighbor_conway = neighbor_cell.effects[@get_key()]
@@ -91,7 +91,9 @@ class ConwayEffect
 
 # Given a pair of coordinates and a doubly-
 # nested list of cells forming the field matrix,
-# represent that cells neighbors as cardinal directions
+# represent that cell's immediate neighbors
+# as compass directions.
+# The Field is treated as donut-shaped.
 class CellArea
     constructor: (row_num, col_num, rows) ->
         mod_wrap = (l, r) ->
@@ -155,7 +157,7 @@ class Cell
     step: (ms) ->
         @next_effects = {}
         for name, effect of @effects
-            @next_effects[name] = effect.step(ms, @area)
+            @next_effects[name] = effect.make_next(ms, @area)
 
     # Switch over to the next set of effects, which should
     # have already been computed using step()
@@ -181,15 +183,10 @@ class Cell
                 effect.on_click()
 
 
-# A 2d array of cells, as well as the coordinates and size
-# used to draw each of the cells and the timing state
-# used to increment the cell state logic
+# a 2d array of cells and coordinates with which to draw
+# them within the canvas.
 class Field
     constructor: (@x, @y, @width, @height, num_rows, num_columns) ->
-        @x = Math.round(@x)
-        @y = Math.round(@y)
-        @width = Math.round(@width)
-        @height = Math.round(@height)
         row_height = @height / num_rows
         column_width = @width / num_columns
         @last_time = Math.floor(new Date().getTime())
@@ -213,19 +210,21 @@ class Field
                 this_cell.area = this_cell_area
 
     draw: (ctx) ->
+        # calculate next effects
         for row in @rows
             for cell in row
                 cell.step(0)
-        # implement effects
+
+        # switch over to new effects
         for row in @rows
             for cell in row
                 cell.flip()
+
         for row in @rows
             for cell in row
                 cell.draw(ctx)
-        return
 
-    # adjust the click coordinates for the Field's offset
+    # adjust the click coordinates for the Field's position
     # and notify the cell that was clicked.
     on_click: (x, y) ->
         field_x = x + @x
@@ -277,9 +276,6 @@ requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimati
 # as close to 60Hz as possible.
 draw_loop = (ctx, drawable_world) ->
     this_time = Math.floor(new Date().getTime())
-    #for drawable_item in drawable_world
-        #if drawable_item.step?
-            #drawable_item.step(this_time)
 
     for drawable_item in drawable_world
         if drawable_item.draw?
@@ -314,12 +310,12 @@ mouse_coordinates = (event, canvas) ->
     return ret
 
 register_click_events = (canvas, field) ->
-    $('canvas').click( (event) ->
+    canvas = document.getElementById('canvas')
+    canvas.onclick = (event) ->
         coordinates = mouse_coordinates(event, canvas)
         field.on_click(coordinates.x, coordinates.y)
-    )
 
-$( ->
+window.onload = ->
     canvas = document.getElementById("canvas")
     ctx = canvas.getContext("2d")
 
@@ -329,4 +325,3 @@ $( ->
     register_click_events(canvas, field)
     
     draw_loop(ctx, drawable_world)
-)
