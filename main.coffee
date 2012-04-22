@@ -12,7 +12,7 @@
 #       in a certain Color.
 # A Color is some amount of alpha, red, green, and blue.
 #
-# This program intiailizes a Field of Cells then repeatedly
+# This program initializes a Field of Cells then repeatedly
 # calculates the changes in Effects to each of those Cells,
 # displaying the resulting Colors on Billboards using an HTML canvas.
 
