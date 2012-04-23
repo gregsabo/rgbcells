@@ -3,11 +3,11 @@
 # Greg Sabo
 #
 # A Field is a 2d-array of Cells.
-# A Cell is a Neighborhood, some Effects, and a Billboard.
-# A Neighborhood is a set of references to 8 nearby Cells.
+# A Cell is a neighborhood, some Effects, and a Billboard.
+# A neighborhood is a set of references to 8 nearby Cells.
 # An Effect is protected state which generates a Color
 #       for each frame depending on the state of the other
-#       Effects in the surrounding Neighborhood.
+#       Effects in the surrounding neighborhood.
 # A Billboard is a rectangle that is repeatedly drawn on an HTML canvas
 #       in a certain Color.
 # A Color is some amount of alpha, red, green, and blue.
@@ -61,11 +61,11 @@ class Field
             @rows.push(this_row)
 
         # Now that all cells exist, introduce them to each other
-        # with Neighborhood objects
+        # with neighborhood lists
         for row_num in [0...num_rows]
             for col_num in [0...num_rows]
                 this_cell = @rows[row_num][col_num]
-                this_cell.neighborhood = new Neighborhood(row_num, col_num, @rows)
+                this_cell.neighborhood = make_neighborhood(row_num, col_num, @rows)
 
     draw: (ctx) ->
         for row in @rows
@@ -135,20 +135,20 @@ class Cell
                 effect.on_click()
 
 
-class Neighborhood
+make_neighborhood = (row_num, column_num, rows) ->
     #rows is a doubly-nested list of Cells
-    constructor: (row_num, column_num, rows) ->
-        donut_rows = new DonutArray(rows)
+    donut_array = new DonutArray(rows)
 
-        @neighbor_list = []
-        for row_offset in [-1, 0, 1]
-            for column_offset in [-1, 0, 1]
-                if row_offset == column_offset == 0
-                    continue
-                neighbor = donut_rows.get(
-                    row_num + row_offset,
-                    column_num + column_offset)
-                @neighbor_list.push(neighbor)
+    neighborhood = []
+    for row_offset in [-1, 0, 1]
+        for column_offset in [-1, 0, 1]
+            if row_offset == column_offset == 0
+                continue
+            neighbor = donut_array.get(
+                row_num + row_offset,
+                column_num + column_offset)
+            neighborhood.push(neighbor)
+    return neighborhood
 
 class DonutArray
     constructor: (@rows) ->
@@ -172,7 +172,7 @@ class ConwayEffect
 
     make_next: (neighborhood) ->
         num_live_neighbors = 0
-        for neighbor_cell in neighborhood.neighbor_list
+        for neighbor_cell in neighborhood
             neighbor_conway = neighbor_cell.effects[@get_key()]
             if neighbor_conway.is_alive
                 num_live_neighbors += 1
