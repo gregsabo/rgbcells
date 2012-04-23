@@ -3,11 +3,11 @@
 # Greg Sabo
 #
 # A Field is a 2d-array of Cells.
-# A Cell is a CellArea, some Effects, and a Billboard.
-# A CellArea is a set of references to 8 nearby Cells.
+# A Cell is a Neighborhood, some Effects, and a Billboard.
+# A Neighborhood is a set of references to 8 nearby Cells.
 # An Effect is protected state which generates a Color
 #       for each frame depending on the state of the other
-#       Effects in the surrounding CellArea.
+#       Effects in the surrounding Neighborhood.
 # A Billboard is a rectangle that is repeatedly drawn on an HTML canvas
 #       in a certain Color.
 # A Color is some amount of alpha, red, green, and blue.
@@ -35,15 +35,9 @@ requestAnimationFrame = (window.requestAnimationFrame ||
                         window.msRequestAnimationFrame)
 
 
-# call .draw() on every object in the drawable_world list,
-# passing in the context (ctx). Recursively repeat
-# as close to 60Hz as possible.
 draw_loop = (ctx, drawable_world) ->
-    this_time = Math.floor(new Date().getTime())
-
     for drawable_item in drawable_world
-        if drawable_item.draw?
-            drawable_item.draw(ctx)
+        drawable_item.draw(ctx)
 
     requestAnimationFrame( ->
         draw_loop(ctx, drawable_world)
@@ -56,7 +50,6 @@ class Field
     constructor: (@x, @y, @width, @height, num_rows, num_columns) ->
         row_height = @height / num_rows
         column_width = @width / num_columns
-        @last_time = Math.floor(new Date().getTime())
 
         @rows = []
         for row_num in [0...num_rows]
@@ -67,26 +60,20 @@ class Field
                 cell_billboard = new Billboard(this_x, this_y,
                     column_width, row_height)
                 this_row.push(new Cell(cell_billboard))
-            @rows.push this_row
+            @rows.push(this_row)
 
         # Now that all cells exist, introduce them to each other
-        # with CellArea objects
+        # with Neighborhood objects
         for row_num in [0...num_rows]
             for col_num in [0...num_rows]
                 this_cell = @rows[row_num][col_num]
-                this_cell_area = new CellArea(row_num, col_num, @rows)
-                this_cell.area = this_cell_area
+                this_cell.neighborhood = new Neighborhood(row_num, col_num, @rows)
 
     draw: (ctx) ->
         # calculate next effects
         for row in @rows
             for cell in row
-                cell.step(0)
-
-        # switch over to new effects
-        for row in @rows
-            for cell in row
-                cell.flip()
+                cell.step()
 
         for row in @rows
             for cell in row
@@ -109,8 +96,8 @@ class Field
 # A cell is a single square on the Field.
 # It knows about:
 #   - A billboard used to display itself
-#   - its own unique set of Effects objects
-#   - its own CellArea object
+#   - its unique set of Effects objects
+#   - its Neighborhood object
 class Cell
     constructor: (@billboard) ->
         effects_list = [
@@ -129,15 +116,15 @@ class Cell
         # this must be set before step() and draw() are called.
         # We don't know this at construction time because 
         # not all of the other cells have been created yet.
-        @area = null
+        @neighborhood = null
         
 
-    # examine the Area and calculate what the next
+    # examine the Neighborhood and calculate what the next
     # set of effects will be (but don't switch to them yet)
-    step: (ms) ->
+    step: ->
         @next_effects = {}
         for name, effect of @effects
-            @next_effects[name] = effect.make_next(ms, @area)
+            @next_effects[name] = effect.make_next(@neighborhood)
 
     # Switch over to the next set of effects, which should
     # have already been computed using step()
@@ -148,6 +135,7 @@ class Cell
     # Draw a square to the 2d context (ctx).
     # The color is averaged from the current set of Effects.
     draw: (ctx) ->
+        @flip()
         colors = []
         for name, effect of @effects
             colors.push(effect.get_color())
@@ -166,38 +154,38 @@ class Cell
 # Given a pair of coordinates and a doubly-
 # nested list of cells forming the field matrix,
 # represent that cell's immediate neighbors
-# as compass directions.
+# as a list of Cell objects.
 # The Field is treated as donut-shaped.
-class CellArea
-    constructor: (row_num, col_num, rows) ->
-        mod_wrap = (l, r) ->
-            out = l % r
-            if out < 0
-                out = out + r
-            return out
+class Neighborhood
+    constructor: (row_num, column_num, rows) ->
+        donut_rows = new DonutArray(rows)
 
-        #convenience vaiables to make indexing simpler
-        num_rows = rows.length
-        up = mod_wrap((row_num - 1), num_rows)
-        down = mod_wrap((row_num + 1), num_rows)
-        level = row_num
+        @neighbor_list = []
+        for row_offset in [-1, 0, 1]
+            for column_offset in [-1, 0, 1]
+                if row_offset == column_offset == 0
+                    continue
+                neighbor = donut_rows.get(
+                    row_num + row_offset,
+                    column_num + column_offset)
+                @neighbor_list.push(neighbor)
 
-        num_columns = rows[0].length
-        left = mod_wrap((col_num - 1), num_columns)
-        right = mod_wrap((col_num + 1), num_columns)
-        middle = col_num
+# takes a 2d array and provides an indexing interface
+# that wraps around on the edges
+class DonutArray
+    constructor: (@rows) ->
 
-        @n = rows[up][middle]
-        @ne = rows[up][right]
-        @e = rows[level][right]
-        @se = rows[down][right]
-        @s = rows[down][middle]
-        @sw = rows[down][left]
-        @w = rows[level][left]
-        @nw = rows[up][left]
+    get: (row_num, column_num) ->
+        wrapped_row_num = @mod_wrap(row_num, @rows.length)
+        wrapped_column_num = @mod_wrap(column_num, @rows[0].length)
+        return @rows[wrapped_row_num][wrapped_column_num]
 
-    get_neighbors: ->
-        return [@n, @ne, @e, @se, @s, @sw, @w, @nw]
+    # Python-like modulo
+    mod_wrap: (lhs, rhs) ->
+        out = lhs % rhs
+        if out < 0
+            out = out + rhs
+        return out
 
 
 # Implements Conway's Game of Life, 
@@ -207,9 +195,9 @@ class ConwayEffect
     constructor: (@on_color) ->
         @is_alive = Math.random() > 0.5
 
-    make_next: (ms, area) ->
+    make_next: (neighborhood) ->
         num_live_neighbors = 0
-        for neighbor_cell in area.get_neighbors()
+        for neighbor_cell in neighborhood.neighbor_list
             neighbor_conway = neighbor_cell.effects[@get_key()]
             if neighbor_conway.is_alive
                 num_live_neighbors += 1
@@ -220,10 +208,6 @@ class ConwayEffect
     
     # returns whether a cell will be alive using Conway's rules
     will_be_alive: (num_live_neighbors, was_alive) ->
-        #if Math.random() > 0.9999
-            # come alive randomly just because
-        #    return yes
-            
         if num_live_neighbors < 2
             # die from underpopulation
             return no
@@ -231,6 +215,7 @@ class ConwayEffect
             # die from overpopulation
             return no
         else if num_live_neighbors is 3
+            # activate from reproduction
             return yes
         else
             return was_alive
@@ -241,15 +226,10 @@ class ConwayEffect
     get_color: ->
         if @is_alive
             return @on_color
-        #return @on_color
         else
             return null
 
 
-# Set of color channels, I put alpha first
-# because it seems most important
-# the string cache assumes that this object
-# is treated as immutable.
 class Color
     constructor: (@a, @r, @g, @b) ->
         @cached_string = null
