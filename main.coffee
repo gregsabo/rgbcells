@@ -28,7 +28,6 @@ window.onload = ->
     draw_loop(ctx, drawable_world)
 
 
-# Use the reqestAnimationFrame function appropriate to the browser
 requestAnimationFrame = (window.requestAnimationFrame ||
                         window.mozRequestAnimationFrame ||
                         window.webkitRequestAnimationFrame ||
@@ -44,8 +43,7 @@ draw_loop = (ctx, drawable_world) ->
     )
 
 
-# a 2d array of cells and coordinates with which to draw
-# them within the canvas.
+# a drawable 2d array of cells
 class Field
     constructor: (@x, @y, @width, @height, num_rows, num_columns) ->
         row_height = @height / num_rows
@@ -70,7 +68,6 @@ class Field
                 this_cell.neighborhood = new Neighborhood(row_num, col_num, @rows)
 
     draw: (ctx) ->
-        # calculate next effects
         for row in @rows
             for cell in row
                 cell.step()
@@ -79,8 +76,6 @@ class Field
             for cell in row
                 cell.draw(ctx)
 
-    # adjust the click coordinates for the Field's position
-    # and notify the cell that was clicked.
     on_click: (x, y) ->
         field_x = x + @x
         field_y = y + @y
@@ -93,11 +88,6 @@ class Field
         @rows[row_num][column_num].on_click()
 
 
-# A cell is a single square on the Field.
-# It knows about:
-#   - A billboard used to display itself
-#   - its unique set of Effects objects
-#   - its Neighborhood object
 class Cell
     constructor: (@billboard) ->
         effects_list = [
@@ -113,27 +103,23 @@ class Cell
             @effects[effect.get_key()] = effect
 
         @next_effects = null
-        # this must be set before step() and draw() are called.
-        # We don't know this at construction time because 
-        # not all of the other cells have been created yet.
+        # We don't know the neighborhood at construction time
         @neighborhood = null
         
 
-    # examine the Neighborhood and calculate what the next
-    # set of effects will be (but don't switch to them yet)
+    # Determine next set of effects, but don't switch yet
     step: ->
         @next_effects = {}
         for name, effect of @effects
             @next_effects[name] = effect.make_next(@neighborhood)
 
-    # Switch over to the next set of effects, which should
-    # have already been computed using step()
+    # Switch over to the next set of effects.
     flip: ->
         @effects = @next_effects
         @next_effects = null
 
-    # Draw a square to the 2d context (ctx).
-    # The color is averaged from the current set of Effects.
+    # A cell can draw itself, but it must refer to its Effects
+    # to determine its color.
     draw: (ctx) ->
         @flip()
         colors = []
@@ -143,20 +129,14 @@ class Cell
         @billboard.set_color(mixed)
         @billboard.draw(ctx)
 
-    # Notify all of the effects that this cell has been
-    # clicked, if they care.
     on_click: ->
         for name, effect of @effects
             if effect.on_click?
                 effect.on_click()
 
 
-# Given a pair of coordinates and a doubly-
-# nested list of cells forming the field matrix,
-# represent that cell's immediate neighbors
-# as a list of Cell objects.
-# The Field is treated as donut-shaped.
 class Neighborhood
+    #rows is a doubly-nested list of Cells
     constructor: (row_num, column_num, rows) ->
         donut_rows = new DonutArray(rows)
 
@@ -170,8 +150,6 @@ class Neighborhood
                     column_num + column_offset)
                 @neighbor_list.push(neighbor)
 
-# takes a 2d array and provides an indexing interface
-# that wraps around on the edges
 class DonutArray
     constructor: (@rows) ->
 
@@ -188,9 +166,6 @@ class DonutArray
         return out
 
 
-# Implements Conway's Game of Life, 
-# displaying on_color if the cell is alive.
-# Only is effected by other ConwayEffects of the same color.
 class ConwayEffect
     constructor: (@on_color) ->
         @is_alive = Math.random() > 0.5
@@ -206,16 +181,12 @@ class ConwayEffect
         next_conway.is_alive = @will_be_alive(num_live_neighbors, @is_alive)
         return next_conway
     
-    # returns whether a cell will be alive using Conway's rules
     will_be_alive: (num_live_neighbors, was_alive) ->
         if num_live_neighbors < 2
-            # die from underpopulation
             return no
         else if num_live_neighbors > 3
-            # die from overpopulation
             return no
         else if num_live_neighbors is 3
-            # activate from reproduction
             return yes
         else
             return was_alive
@@ -248,9 +219,7 @@ class Color
         return as_string
 
 
-# Takes a list of Color objects and
-# returns a new average Color.
-# nulls are ignored.
+# average a list of colors, ignore nulls
 mix_colors = (colors) ->
     present_colors = []
     for color in colors
@@ -276,8 +245,7 @@ mix_colors = (colors) ->
     return new Color(average_a, out_channels.r, out_channels.g, out_channels.b)
 
 
-# An immovable colored square which can change color
-# and be drawn repeatedly to a canvas.
+# An immovable, color-changing rectangle
 class Billboard
     constructor: (x, y, width, height) ->
         # canvas performs better with integer coordinates
@@ -305,10 +273,7 @@ class Billboard
         @is_dirty = no
 
 
-# Take an onclick event and a canvas,
-# and return an {x, y} object with the
-# mouse coordinates adjusted to place the 
-# origin on the canvas instead of in the window
+# adjust coordinates to canvas space
 mouse_coordinates = (event, canvas) ->
     total_offset_x = 0
     total_offset_y = 0
