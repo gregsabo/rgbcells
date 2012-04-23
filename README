@@ -1,9 +1,9 @@
 This project is simply an implementation of Conway's Game of Life in coffeescript for the HTML canvas element. My goal was to make the code as easy-to-understand as possible. I tried to do this with semantically organized classes, as follows:
 
 A Field is a 2d-array of Cells.
-A Cell is a CellArea, some Effects, and a Billboard.
-A CellArea is a set of references to 8 nearby Cells.
-An Effect is protected state which generates a Color for each frame depending on the state of the other Effects in the surrounding CellArea.
+A Cell is a Neighborhood, some Effects, and a Billboard.
+A Neighborhood is a set of references to eight nearby Cells.
+An Effect is protected state which generates a Color for each frame depending on the state of the other Effects in the surrounding Neighborhood.
 A Billboard is a rectangle that is repeatedly drawn on an HTML canvas in a certain Color.
 A Color is some amount of alpha, red, green, and blue.
 
